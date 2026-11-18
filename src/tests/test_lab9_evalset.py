@@ -57,3 +57,27 @@ def test_check_rejects_missing_tags(tmp_path, evalset_cli):
     result = evalset_cli("--check")
     assert result.returncode == 1, result.stdout + result.stderr
     assert "failure_modes empty" in result.stdout
+
+
+@pytest.mark.student
+def test_fm03_c002_trace_regression():
+    """M1: the faulty shape misuses a ticket fact; the fixed shape does not."""
+    from lab9.trace_case import investigate
+
+    broken = investigate("seeded_regression", "C-002", 11)
+    fixed = investigate("fixed", "C-002", 11)
+    broken_trial, fixed_trial = broken["trial"], fixed["trial"]
+
+    assert broken_trial["lab8_pass"] is False
+    assert broken_trial["result"]["status"] == "resolved"
+    assert broken_trial["snapshot"]["refund_vnd"] == 20000
+    assert any(event.get("kind") == "model_override" and
+               event.get("payload", {}).get("delay_days") == 5
+               for event in broken_trial["events"])
+
+    assert fixed_trial["lab8_pass"] is True
+    assert fixed_trial["result"]["status"] == "denied"
+    assert fixed_trial["snapshot"]["refund_vnd"] == 0
+    assert fixed_trial["snapshot"]["refund_count"] == 0
+    assert not any(event.get("kind") == "model_override"
+                   for event in fixed_trial["events"])
