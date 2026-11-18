@@ -30,6 +30,29 @@ REQUIRED = ("item_id", "claim_id", "failure_modes", "provenance", "split", "eval
 FM_CODE = re.compile(r"FM-\d{2}")
 
 
+# M1: Map each public matrix case to failure modes that the case can exercise.
+# FM-01 is a cross-cutting trace-safety check: every public claim includes a
+# parent_secret/raw_headers canary. It is used for cases without a narrower
+# v1 failure mode rather than inventing a new code outside the taxonomy.
+# FM-09 is the principal-scope boundary exercised by T05 (also used in v2).
+FM_BY_MATRIX: dict[str, tuple[str, ...]] = {
+    "T01": ("FM-01",),
+    "T02": ("FM-03",),
+    "T03": ("FM-01",),
+    "T04": ("FM-01",),
+    "T05": ("FM-09",),
+    "T06": ("FM-06",),
+    "T07": ("FM-02",),
+    "T08": ("FM-08",),
+    "T09": ("FM-01",),
+    "T10": ("FM-07",),
+    "T11": ("FM-07",),
+    "T12": ("FM-07",),
+    "T13": ("FM-05",),
+    "T14": ("FM-04", "FM-05"),
+}
+
+
 def load_jsonl(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
@@ -43,11 +66,13 @@ def build(source: Path = SOURCE) -> tuple[int, int]:
     items, labels = [], {}
     for n, claim in enumerate(claims, start=1):
         item_id = f"E-{n:03d}"
+        matrix_id = claim.get("matrix_id")
+        if matrix_id not in FM_BY_MATRIX:
+            raise ValueError(f"No M1 failure-mode mapping for {claim['claim_id']}: {matrix_id!r}")
         items.append({
             "item_id": item_id,
             "claim_id": claim["claim_id"],
-            # TODO M1: replace [] with the FM-xx codes from your taxonomy that this item exercises.
-            "failure_modes": [],
+            "failure_modes": list(FM_BY_MATRIX[matrix_id]),
             "provenance": {"source": "lab8_public", "matrix_id": claim.get("matrix_id"),
                            "from_trace": None, "generator": None,
                            "label_by": "lab8_matrix", "checked_by": None},
@@ -56,8 +81,8 @@ def build(source: Path = SOURCE) -> tuple[int, int]:
         })
         labels[claim["claim_id"]] = claim["expected"]
     ITEMS.parent.mkdir(parents=True, exist_ok=True)
-    ITEMS.write_text("".join(json.dumps(i, ensure_ascii=False) + "\n" for i in items), encoding="utf-8")
-    LABELS.write_text(json.dumps(labels, ensure_ascii=False, indent=2), encoding="utf-8")
+    ITEMS.write_text("".join(json.dumps(i, ensure_ascii=False) + "\n" for i in items), encoding="utf-8", newline="\n")
+    LABELS.write_text(json.dumps(labels, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
     return len(items), len(labels)
 
 
@@ -98,8 +123,8 @@ def build_v2(items_v1: Path = ITEMS, labels_v1: Path = LABELS, pack: Path = PACK
             "slices": slices_for(claim["expected"], True),
         })
         labels[claim["claim_id"]] = claim["expected"]
-    ITEMS_V2.write_text("".join(json.dumps(i, ensure_ascii=False) + "\n" for i in items), encoding="utf-8")
-    LABELS_V2.write_text(json.dumps(labels, ensure_ascii=False, indent=2), encoding="utf-8")
+    ITEMS_V2.write_text("".join(json.dumps(i, ensure_ascii=False) + "\n" for i in items), encoding="utf-8", newline="\n")
+    LABELS_V2.write_text(json.dumps(labels, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
     return len(items), len(labels)
 
 
